@@ -1,0 +1,25 @@
+{
+  "name": "homebridge-myacurite",
+  "version": "0.0.1",
+  "description": "MyAcurite plugin for homebridge",
+  "license": "ISC",
+  "keywords": [
+    "homebridge-plugin",
+    "acurite",
+    "temperature sensor"
+  ],
+  "engines": {
+    "node": ">=0.12.0",
+    "homebridge": ">=0.2.0"
+  },
+  "author": {
+    "name": "@kevindayton"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/kevindayton/homebridge-myacurite.git"
+  },
+  "dependencies": {
+    "axios": "^0.19.2"
+  }
+}
