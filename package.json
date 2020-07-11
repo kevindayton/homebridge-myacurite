@@ -1,6 +1,6 @@
 {
   "name": "homebridge-myacurite",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "MyAcurite plugin for homebridge",
   "license": "ISC",
   "keywords": [
