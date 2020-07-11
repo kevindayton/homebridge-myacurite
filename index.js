@@ -1,148 +1,152 @@
-var Service, Characteristic;
-
 const axios = require('axios');
-
-const CELSIUS_UNITS = 'C',
-      FAHRENHEIT_UNITS = 'F';
-const DEF_MIN_TEMPERATURE = -100,
-      DEF_MAX_TEMPERATURE = 100,
-      DEF_UNITS = CELSIUS_UNITS,
-      DEF_TIMEOUT = 5000,
-      DEF_INTERVAL = 120000; //120s
 const SUPPORTED_DEVICES = [
-  '5-in-1 Weather Station'
+  '5in1WS',
+  '2in1T'
 ]
 const SUPPORTED_CODES = [
-  'Temperature'
+  'Temperature',
+  'Humidity'
 ]
 
-module.exports = function (homebridge) {
-   Service = homebridge.hap.Service;
-   Characteristic = homebridge.hap.Characteristic;
-   homebridge.registerAccessory("homebridge-MyAcurite", "MyAcurite", MyAcurite);
+module.exports = (api) => {
+  api.registerPlatform("homebridge-myacurite", "MyAcurite", MyAcuRitePlatformPlugin);
 }
 
+class MyAcuRitePlatformPlugin {
+  constructor(log, config, api) {
+    this.log = log;
+    this.config = config;
+    this.accessories = [];
+    this.userInfo = null;
+    this.api = api;
+    this.cachedAccessories = [];
+    this.loadedAccessories = [];
 
-function MyAcurite(log, config) {
-   this.log = log;
-   this.config = config;
+    api.on('didFinishLaunching', () => { 
+      for(const a of this.accessories) {
+        this.cachedAccessories.push(a)
+      }
+      this.fetchHubs().then((hubs) =>
+        hubs.forEach(h => {
+          this.fetchHubData(h.id).then((hd) => {
+            hd.forEach((d) => {
+            let lastReadingValue = d.last_reading_value;
+            let uuid = api.hap.uuid.generate(''+d.id+d.sensor_name);
+            var accessory = this.accessories.find(accessory => accessory.UUID === uuid);
+            if (!accessory) {
+              let accessoryName = d.device_name+' '+d.sensor_name;
+              accessory = new api.platformAccessory(accessoryName, uuid);
+              api.registerPlatformAccessories("homebridge-myacurite", 'MyAcurite', [accessory]);
+            }
+            if (d.sensor_name == 'Temperature') {
+              if(d.chart_unit == "F") {
+                lastReadingValue = (d.last_reading_value - 32.0) * 5/9
+              }
+              var temperatureSensorService = accessory.getService(this.api.hap.Service.TemperatureSensor)
+              if (!temperatureSensorService) {
+                temperatureSensorService = accessory.addService(this.api.hap.Service.TemperatureSensor);
+              }
+              temperatureSensorService
+              .getCharacteristic(this.api.hap.Characteristic.CurrentTemperature)
+              .updateValue(''+lastReadingValue)
+            } else if(d.sensor_name == 'Humidity') {
+              var humiditySensorService = accessory.getService(this.api.hap.Service.HumiditySensor)
+              if (!humiditySensorService) {
+                humiditySensorService = accessory.addService(this.api.hap.Service.HumiditySensor);
+              }
+              humiditySensorService
+              .getCharacteristic(this.api.hap.Characteristic.CurrentRelativeHumidity)
+              .updateValue(parseFloat(d.last_reading_value))
+            }
+            accessory.getService(this.api.hap.Service.AccessoryInformation)
+              .setCharacteristic(this.api.hap.Characteristic.Manufacturer, "Acurite")
+              .setCharacteristic(this.api.hap.Characteristic.Model, d.model.description)
+              .setCharacteristic(this.api.hap.Characteristic.SerialNumber, d.model.id);
+            this.loadedAccessories.push(accessory.UUID);
+          })
+          this.cachedAccessories.forEach(a => {
+            if(!this.loadedAccessories.includes(a.UUID)) {
+              api.unregisterPlatformAccessories("homebridge-myacurite", 'MyAcurite', [a]);
+            }
+          })
+        })
+      })
+      )
+    });
+  }
 
-   this.name = config["name"] || "MyAcurite";
-   this.minTemperature = config["min_temp"] || DEF_MIN_TEMPERATURE;
-   this.maxTemperature = config["max_temp"] || DEF_MAX_TEMPERATURE;
-   this.units = config["units"] || DEF_UNITS;
-   this.update_interval = Number( config["update_interval"] || DEF_INTERVAL );
+  configureAccessory(accessory) {
+    this.accessories.push(accessory);
+  }
 
-   //Check if units field is valid
-   this.units = this.units.toUpperCase()
-   if (this.units !== CELSIUS_UNITS && this.units !== FAHRENHEIT_UNITS) {
-      this.log('Bad temperature units : "' + this.units + '" (assuming Celsius).');
-      this.units = CELSIUS_UNITS;
+  async login(email, password) {
+    let response = await axios.post('https://marapi.myacurite.com/users/login', {
+        "remember": true,
+        "email": email,
+        "password": password
+      })
+    this.userInfo = response.data
+    return response
+  }
+
+  async fetchHubs() {
+    var hubs = [];
+    if(!this.userInfo) {
+      await this.login(this.config["email"],this.config["password"]);
+    }
+    try {
+      let response = await axios.get(`https://marapi.myacurite.com/accounts/176464/dashboard/hubs`,
+        {
+        headers: {
+          'X-One-Vue-Token': this.userInfo.token_id,
+        }
+      })
+      hubs = response.data.account_hubs;
+    } catch (e) {
+      this.log(e)
+    } finally {
+    }
+    return hubs
+  }
+
+  async fetchHubData(hub, userInfo) {
+    if(!userInfo) {
+      var l = await this.login(this.config["email"],this.config["password"])
+      this.userInfo = l.data
+    }
+    try {
+      let response = await axios.get(`https://marapi.myacurite.com/accounts/176464/dashboard/hubs/${hub}`,
+        {
+        headers: {
+          'X-One-Vue-Token': this.userInfo.token_id,
+        }
+      })
+      let devices = response.data.devices
+        .filter(d => SUPPORTED_DEVICES.includes(d.model_code))
+        .map(d => {
+          d.sensors = d.sensors.filter(s => SUPPORTED_CODES.includes(s.sensor_code))
+          return d
+        })
+      var lastTemperatureReadings = devices.reduce((a,b) => {
+        let values = b.sensors.map(s => {
+          return {
+            id : s.id,
+            device_name : b.name,
+            model: b.model, 
+            battery_level: b.battery_level,
+            sensor_name: s.sensor_name,
+            last_reading_value : s.last_reading_value,
+            chart_unit : s.chart_unit
+          }
+        })
+        a.push(values)
+        return a
+      },[]).reduce((a, v) => a.concat(v), [])
+      return lastTemperatureReadings
+    } catch (e) {
+      console.log(e)
+    } finally {
+
+     }
    }
-
-   // Internal variables
-   this.last_value = null;
-   this.waiting_response = false;
 }
-
-MyAcurite.prototype = {
-
-   updateState: function () {
-      //Ensure previous call finished
-      if (this.waiting_response) {
-         this.log('Avoid updateState as previous response does not arrived yet');
-         return;
-      }
-      this.waiting_response = false;
-
-      this.last_value = this.fetchHubData(978773,null);
-   },
-
-   getState: function (callback) {
-      this.log('Call to getState: waiting_response is "' + this.waiting_response + '"' );
-      this.updateState(); //This sets the promise in last_value
-      this.last_value.then((value) => {
-        this.log(value)
-         callback(null, value);
-         return value;
-      }, (error) => {
-         callback(error, null);
-         return error;
-      });
-   },
-
-   getServices: function () {
-      this.informationService = new Service.AccessoryInformation();
-      this.informationService
-      .setCharacteristic(Characteristic.Manufacturer, "Acurite")
-      .setCharacteristic(Characteristic.Model, "00000")
-      .setCharacteristic(Characteristic.SerialNumber, "00000");
-
-      this.temperatureService = new Service.TemperatureSensor(this.name);
-      this.temperatureService
-         .getCharacteristic(Characteristic.CurrentTemperature)
-         .on('get', this.getState.bind(this))
-         .setProps({
-             minValue: this.minTemperature,
-             maxValue: this.maxTemperature
-         });
-
-      if (this.update_interval > 0) {
-         this.timer = setInterval(this.updateState.bind(this), this.update_interval);
-      }
-
-      return [this.informationService, this.temperatureService];
-   },
-
-   fetchHubData : async function(hub, userInfo) {
-     if(!userInfo) {
-       var l = await this.login(this.config["email"],this.config["password"])
-       userInfo = l.data
-     }
-     try {
-       let response = await axios.get(`https://marapi.myacurite.com/accounts/176464/dashboard/hubs/${hub}`,
-         {
-         headers: {
-           'X-One-Vue-Token': userInfo.token_id,
-         }
-       })
-       devices = response.data.devices
-         .filter(d => SUPPORTED_DEVICES.includes(d.name))
-         .map(d => {
-           d.sensors = d.sensors.filter(s => SUPPORTED_CODES.includes(s.sensor_code))
-           return d
-         })
-       var lastTemperatureReadings = devices.reduce((a,b) => {
-         let values = b.sensors.map(s => {
-           return {
-             id : s.id,
-             last_reading_value : s.last_reading_value,
-             chart_unit : s.chart_unit
-           }
-         })
-         a.push(values)
-         return a
-       },[]).reduce((a, v) => a.concat(v), [])
-       lastTemperatureReading = lastTemperatureReadings[0]
-       value = lastTemperatureReading["last_reading_value"]
-       if (lastTemperatureReading["chart_unit"] === 'F') {
-                      value = (value - 32)/1.8;
-                      this.log('Converted Fahrenheit temperature to celsius: ' + value);
-                   }
-       return value
-     } catch (e) {
-       console.log(e)
-     } finally {
-
-     }
-   },
-
-   login : async function(email, password) {
-     let response = await axios.post('https://marapi.myacurite.com/users/login', {
-         "remember": true,
-         "email": email,
-         "password": password
-       })
-     return response
-   },
-};
