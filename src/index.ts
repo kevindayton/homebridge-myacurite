@@ -23,6 +23,7 @@ type SensorReading = {
   device_name: string;
   model: { id: string | number; description: string };
   battery_level?: number;
+  status_code?: string;
   sensor_name: string;
   sensor_code?: string;
   last_reading_value: number | string;
@@ -45,6 +46,7 @@ type Device = {
   name: string;
   model: { id: string | number; description: string };
   battery_level?: number;
+  status_code?: string;
   sensors?: Sensor[];
 };
 
@@ -80,6 +82,7 @@ function mapDevicesToReadings(
         device_name: b.name,
         model: b.model,
         battery_level: b.battery_level,
+        status_code: b.status_code,
         sensor_name: s.sensor_name,
         sensor_code: s.sensor_code,
         last_reading_value: s.last_reading_value,
@@ -191,6 +194,7 @@ class MyAcuRitePlatformPlugin implements DynamicPlatformPlugin {
 
   private processReading(reading: SensorReading): void {
     let lastReadingValue = reading.last_reading_value;
+    const sensorCode = reading.sensor_code || reading.sensor_name;
     const uuid = this.api.hap.uuid.generate(`${reading.id}${reading.sensor_name}`);
     let accessory = this.accessories.find(existing => existing.UUID === uuid);
     if (!accessory) {
@@ -200,7 +204,7 @@ class MyAcuRitePlatformPlugin implements DynamicPlatformPlugin {
     }
     accessory.displayName = this.getAccessoryName(reading);
 
-    if (reading.sensor_name === 'Temperature') {
+    if (sensorCode === 'Temperature' || sensorCode === 'Dew Point') {
       if (reading.chart_unit === "F") {
         lastReadingValue = (Number(reading.last_reading_value) - 32.0) * 5 / 9;
       }
@@ -216,10 +220,8 @@ class MyAcuRitePlatformPlugin implements DynamicPlatformPlugin {
       } else {
         this.logError(`Skipping invalid temperature value for sensor ${reading.id}.`);
       }
-      temperatureSensorService
-        .getCharacteristic(this.api.hap.Characteristic.StatusActive)
-        .updateValue(true);
-    } else if (reading.sensor_name === 'Humidity') {
+      this.applyStatus(temperatureSensorService, reading);
+    } else if (sensorCode === 'Humidity') {
       const humiditySensorService = accessory.getService(this.api.hap.Service.HumiditySensor) ||
         accessory.addService(this.api.hap.Service.HumiditySensor);
       const value = Number(parseFloat(String(reading.last_reading_value)));
@@ -232,9 +234,7 @@ class MyAcuRitePlatformPlugin implements DynamicPlatformPlugin {
       } else {
         this.logError(`Skipping invalid humidity value for sensor ${reading.id}.`);
       }
-      humiditySensorService
-        .getCharacteristic(this.api.hap.Characteristic.StatusActive)
-        .updateValue(true);
+      this.applyStatus(humiditySensorService, reading);
     } else {
       this.logInfo(`Unsupported sensor type "${reading.sensor_name}" (${reading.sensor_code}).`);
     }
@@ -266,6 +266,17 @@ class MyAcuRitePlatformPlugin implements DynamicPlatformPlugin {
 
   private getAccessoryName(reading: SensorReading): string {
     return buildAccessoryName(reading, this.nameOverrides);
+  }
+
+  private applyStatus(service: any, reading: SensorReading): void {
+    const status = (reading.status_code || '').toLowerCase();
+    const isFault = status.length > 0 && status !== 'green';
+    service
+      .getCharacteristic(this.api.hap.Characteristic.StatusActive)
+      .updateValue(true);
+    service
+      .getCharacteristic(this.api.hap.Characteristic.StatusFault)
+      .updateValue(isFault ? 1 : 0);
   }
 
   private shouldUpdate(uuid: string, value: number): boolean {

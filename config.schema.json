@@ -57,7 +57,8 @@
         },
         "default": [
           "Temperature",
-          "Humidity"
+          "Humidity",
+          "Dew Point"
         ],
         "description": "List of sensor codes to include."
       },

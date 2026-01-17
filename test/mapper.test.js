@@ -47,6 +47,23 @@ test('mapDevicesToReadings filters by device and sensor codes', () => {
   );
 });
 
+test('mapDevicesToReadings includes dew point when configured', () => {
+  const devices = [
+    {
+      model_code: '2in1T',
+      name: 'Sensor',
+      model: { id: 'm1', description: 'Model One' },
+      sensors: [
+        { id: 1, sensor_name: 'Dew Point', sensor_code: 'Dew Point', last_reading_value: 10, chart_unit: 'F' }
+      ]
+    }
+  ];
+
+  const readings = mapDevicesToReadings(devices, ['2in1T'], ['Dew Point']);
+  assert.equal(readings.length, 1);
+  assert.equal(readings[0].sensor_name, 'Dew Point');
+});
+
 test('buildAccessoryName supports id and composite overrides', () => {
   const reading = { id: 123, device_name: 'Device', sensor_name: 'Temperature' };
   assert.equal(buildAccessoryName(reading, { '123': 'By Id' }), 'By Id');

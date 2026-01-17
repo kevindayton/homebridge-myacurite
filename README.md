@@ -37,7 +37,7 @@ npm install
 ## Supported Devices & Sensors
 
 - Devices: `5in1WS`, `2in1T`
-- Sensors: `Temperature`, `Humidity`
+- Sensors: `Temperature`, `Humidity`, `Dew Point`
 - Battery level is exposed via the Battery service when available.
 
 ## Development Commands
