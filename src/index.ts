@@ -248,14 +248,16 @@ class MyAcuRitePlatformPlugin implements DynamicPlatformPlugin {
     if (reading.battery_level !== undefined && reading.battery_level !== null) {
       const batteryService = accessory.getService(this.api.hap.Service.BatteryService) ||
         accessory.addService(this.api.hap.Service.BatteryService);
-      const batteryLevel = Number(reading.battery_level);
-      if (!Number.isNaN(batteryLevel)) {
+      const batteryLevel = this.normalizeBatteryLevel(reading.battery_level);
+      if (batteryLevel !== null) {
         batteryService
           .getCharacteristic(this.api.hap.Characteristic.BatteryLevel)
           .updateValue(batteryLevel);
         batteryService
           .getCharacteristic(this.api.hap.Characteristic.StatusLowBattery)
           .updateValue(batteryLevel <= this.batteryLowThreshold ? 1 : 0);
+      } else {
+        this.logInfo(`Skipping unrecognized battery level for device ${reading.device_name}.`);
       }
     }
 
@@ -318,6 +320,27 @@ class MyAcuRitePlatformPlugin implements DynamicPlatformPlugin {
       return;
     }
     console.log(message);
+  }
+
+  private normalizeBatteryLevel(value: number | string): number | null {
+    if (typeof value === 'number') {
+      return Number.isNaN(value) ? null : value;
+    }
+    const numeric = Number(value);
+    if (!Number.isNaN(numeric)) {
+      return numeric;
+    }
+    const normalized = String(value).trim().toLowerCase();
+    if (normalized === 'normal' || normalized === 'good') {
+      return 100;
+    }
+    if (normalized === 'low') {
+      return 10;
+    }
+    if (normalized === 'very low' || normalized === 'critical') {
+      return 1;
+    }
+    return null;
   }
 
   private formatError(error: any): string {
