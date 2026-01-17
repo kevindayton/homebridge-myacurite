@@ -1,0 +1,88 @@
+{
+  "pluginAlias": "MyAcurite",
+  "pluginType": "platform",
+  "singular": true,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "title": "Name",
+        "default": "MyAcurite"
+      },
+      "platform": {
+        "type": "string",
+        "title": "Platform",
+        "default": "MyAcurite"
+      },
+      "email": {
+        "type": "string",
+        "title": "Email",
+        "format": "email"
+      },
+      "password": {
+        "type": "string",
+        "title": "Password",
+        "format": "password"
+      },
+      "accountId": {
+        "type": "string",
+        "title": "Account ID",
+        "description": "Optional. If omitted, the plugin will try to infer it from login."
+      },
+      "refreshIntervalSeconds": {
+        "type": "integer",
+        "title": "Refresh Interval (seconds)",
+        "default": 300,
+        "minimum": 30,
+        "description": "Polling interval for fetching sensor updates."
+      },
+      "supportedDeviceCodes": {
+        "type": "array",
+        "title": "Supported Device Codes",
+        "items": {
+          "type": "string"
+        },
+        "default": [
+          "5in1WS",
+          "2in1T"
+        ],
+        "description": "List of device model codes to include."
+      },
+      "supportedSensorCodes": {
+        "type": "array",
+        "title": "Supported Sensor Codes",
+        "items": {
+          "type": "string"
+        },
+        "default": [
+          "Temperature",
+          "Humidity"
+        ],
+        "description": "List of sensor codes to include."
+      },
+      "batteryLowThreshold": {
+        "type": "integer",
+        "title": "Battery Low Threshold",
+        "default": 20,
+        "minimum": 0,
+        "maximum": 100,
+        "description": "Battery percentage at or below which StatusLowBattery is set."
+      },
+      "nameOverrides": {
+        "type": "object",
+        "title": "Name Overrides",
+        "additionalProperties": {
+          "type": "string"
+        },
+        "description": "Map of sensorId or \"Device Name:Sensor Name\" to custom accessory names."
+      }
+    },
+    "required": [
+      "name",
+      "platform",
+      "email",
+      "password"
+    ]
+  }
+}

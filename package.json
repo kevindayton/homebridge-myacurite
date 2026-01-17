@@ -1,0 +1,45 @@
+{
+  "name": "homebridge-myacurite",
+  "version": "0.0.2",
+  "description": "MyAcurite plugin for homebridge",
+  "license": "ISC",
+  "keywords": [
+    "homebridge-plugin",
+    "acurite",
+    "temperature sensor"
+  ],
+  "engines": {
+    "node": ">=18.0.0",
+    "homebridge": ">=1.8.0"
+  },
+  "author": {
+    "name": "@kevindayton"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/kevindayton/homebridge-myacurite.git"
+  },
+  "dependencies": {
+    "axios": "^0.19.2"
+  },
+  "scripts": {
+    "build": "tsc",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "prepublishOnly": "npm run build",
+    "test": "npm run build && node --test",
+    "watch": "tsc -w"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "config.schema.json",
+    "README.md",
+    "AGENTS.md"
+  ],
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "homebridge": "^1.8.0",
+    "typescript": "^5.6.3"
+  }
+}
