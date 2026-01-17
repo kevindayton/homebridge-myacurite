@@ -242,7 +242,7 @@ class MyAcuRitePlatformPlugin implements DynamicPlatformPlugin {
     accessory.getService(this.api.hap.Service.AccessoryInformation)
       .setCharacteristic(this.api.hap.Characteristic.Manufacturer, "Acurite")
       .setCharacteristic(this.api.hap.Characteristic.Model, reading.model.description)
-      .setCharacteristic(this.api.hap.Characteristic.SerialNumber, reading.model.id)
+      .setCharacteristic(this.api.hap.Characteristic.SerialNumber, String(reading.model.id))
       .setCharacteristic(this.api.hap.Characteristic.Name, accessory.displayName);
 
     if (reading.battery_level !== undefined && reading.battery_level !== null) {
@@ -303,13 +303,13 @@ class MyAcuRitePlatformPlugin implements DynamicPlatformPlugin {
   private logError(message: string, error?: any): void {
     if (this.log && this.log.error) {
       if (error) {
-        this.log.error(`${message} ${error.message || error}`);
+        this.log.error(`${message} ${this.formatError(error)}`);
       } else {
         this.log.error(message);
       }
       return;
     }
-    console.error(message, error || '');
+    console.error(message, error ? this.formatError(error) : '');
   }
 
   private logInfo(message: string): void {
@@ -318,6 +318,20 @@ class MyAcuRitePlatformPlugin implements DynamicPlatformPlugin {
       return;
     }
     console.log(message);
+  }
+
+  private formatError(error: any): string {
+    if (!error) {
+      return '';
+    }
+    if (error.response) {
+      const status = error.response.status;
+      const statusText = error.response.statusText || '';
+      const data = error.response.data || {};
+      const detail = data.message || data.error || '';
+      return `(${status}${statusText ? ` ${statusText}` : ''}) ${detail}`.trim();
+    }
+    return `${error.message || error}`.trim();
   }
 
   private async login(email: string, password: string): Promise<any> {
